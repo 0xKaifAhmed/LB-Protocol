@@ -27,6 +27,11 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
         dai
     }
 
+    enum poolType {
+        stable,
+        eth
+    }
+
     //events
     event Deposit(address, uint256, address); //sender , amount, token
     event Withdraw(address, uint256, address); //to , amount, token
@@ -42,6 +47,13 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
         _;
     }
 
+    modifier isInitialized() {
+        require(
+            ethPool != address(0) && stablePool != address(0),
+            "Not Initialized"
+        );
+    }
+
     function pauseContract() external onlyOwner {
         if (!paused()) _pause();
     }
@@ -50,21 +62,26 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
         if (paused()) _unpause();
     }
 
-    function initPool(address poolAddress, tokenType) external onlyOwner {
+    function initPool(address poolAddress, poolType) external onlyOwner {
         require(poolAddress != address(0), "invalid Address");
-        if (tokenType == 0) {
+        if (poolType == 0) {
             ethPool = poolAddress;
-            emit UpdatePool(EthPool, poolAddress);
-        } else {
+            emit UpdatePool("EthPool", poolAddress);
+        } else if (poolType == 1) {
             stablePool = poolAddress;
-            emit UpdatePool(StablePool, poolAddress);
+            emit UpdatePool("StablePool", poolAddress);
+        } else {
+            revert("Invalid Selection");
         }
     }
 
-    function deposit(
-        uint256 amount,
-        tokenType
-    ) external payable whenNotPaused nonReentrant {
+    function deposit(uint256 amount, tokenType)
+        external
+        payable
+        whenNotPaused
+        nonReentrant
+        isInitialized
+    {
         if (tokenType == 0) {
             require(msg.value != 0 && msg.value >= amount, "0 ETH");
             IEthValut(ethPool).deposit.call{value: msg.value}(
@@ -97,8 +114,8 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
         uint256 amount,
         tokenType,
         bool fee
-    ) external whenNotPaused nonReentrant {
-      //  require(to != address(0), "Invalid Address");
+    ) external whenNotPaused nonReentrant isInitialized {
+        //  require(to != address(0), "Invalid Address");
         if (tokenType == 0) {
             _withdrawEth(amount);
         } else if (tokenType == 1) {
@@ -124,42 +141,41 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
         if (amount == type(uint256).max) {
             amountToWithdraw = userBalance;
         }
-        (uint256 _amount) = IStableValut(stablePool).withdraw(
+        uint256 _amount = IStableValut(stablePool).withdraw(
             msg.sender,
             amountToWithdraw,
             asset
         );
-        if(fee){
+        if (fee) {
             uint256 feeAmount = (stablePool).claimFee(msg.sender, asset);
-            emit FeeClaimed(msg.sender, null);
+            emit FeeClaimed(msg.sender, feeAmount);
         }
-        emit Withdraw(msg.sender, _amount, feeAmount);
+        emit Withdraw(msg.sender, _amount, asset);
     }
 
-    function _withdrawEth(uint256 amount) internal {
+    function _withdrawEth(uint256 amount, bool fee) internal {
         uint256 amountToWithdraw = amount;
         uint256 userBalance = IEthVault(ethPool).balanceOf(msg.sender);
         require(userBalance >= amount, "Insufficient Balance");
         if (amount == type(uint256).max) {
             amountToWithdraw = userBalance;
         }
-        uint256 _amount = IEthValut(ethPool).withdraw(msg.sender, amountToWithdraw);
+        uint256 _amount = IEthValut(ethPool).withdraw(
+            msg.sender,
+            amountToWithdraw
+        );
+        if (fee) {
+            uint256 feeAmount = (stablePool).claimFee(msg.sender, asset);
+            emit FeeClaimed(msg.sender, feeAmount);
+        }
         emit Withdraw(msg.sender, _amount, asset);
     }
 
-    function borrow() external {
+    function borrow() external {}
 
-    }
+    function repay() external {}
 
-    function repay() external {
+    function liquidate() external {}
 
-    }
-
-    function liquidate() external {
-
-    }
-
-    function flashLoan() external {
-
-    }
+    function flashLoan() external {}
 }
