@@ -1,21 +1,36 @@
-pragma solidity 0.8.10;
+pragma solidity 0.8.15;
+pragma abicoder v2;
 
-import {IERC20} from '../../dependencies/openzeppelin/contracts/IERC20.sol';
-import {SafeERC20} from '../../dependencies/openzeppelin/contracts/SafeERC20.sol';
-import "./ILB.sol";
-import "LBToken.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
+import "./Interfaces/IEthVault.sol";
+import "./Interfaces/IStableVault.sol";
+import "./Interfaces/ILbPool.sol";
 
-
-contract LBPool is ILBPool, LBToken {
-
+contract LBPool is ReentrancyGuard, Pausable, ILBPool {
     //variables
-    address public owner;
-    bool pause;
+    address private owner;
+    address private ethPool;
+    address private stablePool;
+
+    //constants
+    address private constant usdt = 0x1;
+    address private constant usdc = 0x2;
+    address private constant dai = 0x3;
+
+    enum tokenType {
+        eth,
+        usdt,
+        usdc,
+        dai
+    }
 
     //events
-    event ContactPaused(bool);
-    event Deposit(address,uint256,address); //sender , amount, token
-    event Withdraw(address,uint256,address); //to , amount, token
+    event Deposit(address, uint256, address); //sender , amount, token
+    event Withdraw(address, uint256, address); //to , amount, token
+    event UpdatePool(string, address); //pool name, pool address
 
     constructor() {
         owner = msg.sender;
@@ -26,29 +41,120 @@ contract LBPool is ILBPool, LBToken {
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!pause , "Contract is paused");
-        _;
-    }
-
     function pauseContract() external onlyOwner {
-        pause = true;
-        emit ContactPaused(pause);
+        if (!paused()) _pause();
     }
 
     function unPauseContract() external onlyOwner {
-        pause = false;
-        emit ContactPaused(pause);
+        if (paused()) _unpause();
     }
 
-    function deposit(address asset, uint256 amount) external whenNotPaused {
-        require(asset != 0x0 && amount >= 0 , "invalid input");
+    function initPool(address poolAddress, tokenType) external onlyOwner {
+        require(poolAddress != address(0), "invalid Address");
+        if (tokenType == 0) {
+            ethPool = poolAddress;
+            emit UpdatePool(EthPool, poolAddress);
+        } else {
+            stablePool = poolAddress;
+            emit UpdatePool(StablePool, poolAddress);
+        }
     }
 
-    function withdraw() external whenNotPaused {
+    function deposit(
+        uint256 amount,
+        tokenType
+    ) external payable whenNotPaused nonReentrant {
+        if (tokenType == 0) {
+            require(msg.value != 0 && msg.value >= amount, "0 ETH");
+            IEthValut(ethPool).deposit.call{value: msg.value}(
+                msg.sender,
+                amount
+            );
+            // IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+        } else if (tokenType == 1) {
+            _deposit(msg.sender, amount, usdt);
+        } else if (tokenType == 2) {
+            _deposit(msg.sender, amount, usdc);
+        } else if (tokenType == 3) {
+            _deposit(msg.sender, amount, dai);
+        } else {
+            revert("Invalid Selection");
+        }
+    }
+
+    function _deposit(
+        address from,
+        uint256 amount,
+        address asset
+    ) internal {
+        require(asset != address(0) && amount >= 0, "invalid input");
+        IStableVault(stablePool).deposit(from, amount, asset);
+        emit Deposit(from, amount, asset);
+    }
+
+    function withdraw(
+        address to,
+        uint256 amount,
+        tokenType
+    ) external whenNotPaused nonReentrant {
+        require(to != address(0), "Invalid Address");
+        if (tokenType == 0) {
+            _withdrawEth(to, amount);
+        } else if (tokenType == 1) {
+            _withdraw(to, amount, usdt);
+        } else if (tokenType == 2) {
+            _withdraw(to, amount, usdc);
+        } else if (tokenType == 3) {
+            _withdraw(to, amount, dai);
+        } else {
+            revert("Invalid Selection");
+        }
+    }
+
+    function _withdraw(
+        address to,
+        uint256 amount,
+        address asset
+    ) internal {
+        //can be private
+        uint256 amountToWithdraw = amount;
+        uint256 userBalance = IStableVault(stablePool).balanceOf(msg.sender);
+        require(userBalance >= amount, "Insufficient Balance");
+        if (amount == type(uint256).max) {
+            amountToWithdraw = userBalance;
+        }
+        (uint256 _amount) = IStableValut(stablePool).withdraw(
+            to,
+            amountToWithdraw,
+            asset
+        );
+        emit Withdraw(to, _amount, asset);
+    }
+
+    function _withdrawEth(address to, uint256 amount) internal {
+        uint256 amountToWithdraw = amount;
+        uint256 userBalance = IEthVault(ethPool).balanceOf(msg.sender);
+        require(userBalance >= amount, "Insufficient Balance");
+        if (amount == type(uint256).max) {
+            amountToWithdraw = userBalance;
+        }
+        uint256 _amount = IEthValut(ethPool).withdraw(to, amountToWithdraw);
+        emit Withdraw(to, _amount, asset);
+    }
+
+    function borrow() external {
 
     }
 
+    function repay() external {
 
+    }
 
+    function liquidate() external {
+
+    }
+
+    function flashLoan() external {
+
+    }
 }
