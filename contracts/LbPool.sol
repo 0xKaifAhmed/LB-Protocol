@@ -31,6 +31,7 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
     event Deposit(address, uint256, address); //sender , amount, token
     event Withdraw(address, uint256, address); //to , amount, token
     event UpdatePool(string, address); //pool name, pool address
+    event FeeClaimed(address, uint256); //if user claim fee
 
     constructor() {
         owner = msg.sender;
@@ -94,17 +95,18 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
 
     function withdraw(
         uint256 amount,
-        tokenType
+        tokenType,
+        bool fee
     ) external whenNotPaused nonReentrant {
       //  require(to != address(0), "Invalid Address");
         if (tokenType == 0) {
             _withdrawEth(amount);
         } else if (tokenType == 1) {
-            _withdraw(amount, usdt);
+            _withdraw(amount, usdt, fee);
         } else if (tokenType == 2) {
-            _withdraw(amount, usdc);
+            _withdraw(amount, usdc, fee);
         } else if (tokenType == 3) {
-            _withdraw(amount, dai);
+            _withdraw(amount, dai, fee);
         } else {
             revert("Invalid Selection");
         }
@@ -112,7 +114,8 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
 
     function _withdraw(
         uint256 amount,
-        address asset
+        address asset,
+        bool fee
     ) internal {
         //can be private
         uint256 amountToWithdraw = amount;
@@ -126,7 +129,11 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
             amountToWithdraw,
             asset
         );
-        emit Withdraw(msg.sender, _amount, asset);
+        if(fee){
+            uint256 feeAmount = (stablePool).claimFee(msg.sender, asset);
+            emit FeeClaimed(msg.sender, null);
+        }
+        emit Withdraw(msg.sender, _amount, feeAmount);
     }
 
     function _withdrawEth(uint256 amount) internal {
