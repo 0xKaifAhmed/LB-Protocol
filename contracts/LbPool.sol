@@ -93,26 +93,24 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
     }
 
     function withdraw(
-        address to,
         uint256 amount,
         tokenType
     ) external whenNotPaused nonReentrant {
-        require(to != address(0), "Invalid Address");
+      //  require(to != address(0), "Invalid Address");
         if (tokenType == 0) {
-            _withdrawEth(to, amount);
+            _withdrawEth(amount);
         } else if (tokenType == 1) {
-            _withdraw(to, amount, usdt);
+            _withdraw(amount, usdt);
         } else if (tokenType == 2) {
-            _withdraw(to, amount, usdc);
+            _withdraw(amount, usdc);
         } else if (tokenType == 3) {
-            _withdraw(to, amount, dai);
+            _withdraw(amount, dai);
         } else {
             revert("Invalid Selection");
         }
     }
 
     function _withdraw(
-        address to,
         uint256 amount,
         address asset
     ) internal {
@@ -124,22 +122,22 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
             amountToWithdraw = userBalance;
         }
         (uint256 _amount) = IStableValut(stablePool).withdraw(
-            to,
+            msg.sender,
             amountToWithdraw,
             asset
         );
-        emit Withdraw(to, _amount, asset);
+        emit Withdraw(msg.sender, _amount, asset);
     }
 
-    function _withdrawEth(address to, uint256 amount) internal {
+    function _withdrawEth(uint256 amount) internal {
         uint256 amountToWithdraw = amount;
         uint256 userBalance = IEthVault(ethPool).balanceOf(msg.sender);
         require(userBalance >= amount, "Insufficient Balance");
         if (amount == type(uint256).max) {
             amountToWithdraw = userBalance;
         }
-        uint256 _amount = IEthValut(ethPool).withdraw(to, amountToWithdraw);
-        emit Withdraw(to, _amount, asset);
+        uint256 _amount = IEthValut(ethPool).withdraw(msg.sender, amountToWithdraw);
+        emit Withdraw(msg.sender, _amount, asset);
     }
 
     function borrow() external {
