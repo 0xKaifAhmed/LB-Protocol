@@ -36,25 +36,21 @@ contract StableVault is LbStorage, ERC20 {
         address _asset
     ) public onlyContract returns (uint256 _amount) {
         (uint256 fee, uint256 userShare) = calculateFeeAndShares(_to, _asset);
+        require(userShare != 0 , "User Does'nt exists");
         if (_value <= userShare) {
             amounts[_to][_asset] -= _value;
-            assetSupply[_asset] -= _value; //ma bhan ho gai
+            assetSupply[_asset] -= _value; 
             _burn(_to, _value);
             IERC20(_asset).safeTransfer(_to, _value);
             _amount = _value;
-        }else if(_value <= userShare + fee){
-            amounts[_to][_asset] -= _value;
-            assetSupply[_asset] -= _value; //ma bhan ho gai
-            _burn(_to, _value);
-            IERC20(_asset).safeTransfer(_to, _value);
+        }else if(_value > userShare && _value <= userShare + fee){
+            amounts[_to][_asset] -= userShare;
+            assetSupply[_asset] -= userShare;
+            _burn(_to, userShare);
+            IERC20(_asset).safeTransfer(_to, userShare + fee);
+            //need to update fee // lets work on fee distribution
             _amount = _value;
-        }
-        require(_value <= userShare, "Invalid Amount");
-        amounts[_to][_asset] -= _value;
-        assetSupply[_asset] -= _value; //ma bhan ho gai
-        _burn(_to, _value);
-        IERC20(_asset).safeTransfer(_to, _value);
-        _amount = _value;
+        }   
     }
 
     function calculateFeeAndShares(address user, address asset)
