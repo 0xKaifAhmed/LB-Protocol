@@ -62,7 +62,11 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
         if (paused()) _unpause();
     }
 
-    function initPool(address poolAddress, poolType) external onlyOwner {
+    function initializePool(address poolAddress, poolType)
+        external
+        onlyOwner
+        whenNotPaused
+    {
         require(poolAddress != address(0), "invalid Address");
         if (poolType == 0) {
             ethPool = poolAddress;
@@ -88,7 +92,6 @@ contract LBPool is ReentrancyGuard, Pausable, ILBPool {
                 msg.sender,
                 amount
             );
-            // IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
         } else if (tokenType == 1) {
             _deposit(msg.sender, amount, usdt);
         } else if (tokenType == 2) {

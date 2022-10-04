@@ -71,5 +71,6 @@ contract StableVault is LbStorage, ERC20 {
         if (fee != 0) {
             IERC20(asset).safeTransfer(user, fee);
         }
+        //need to update and store fee distribution
     }
 }
